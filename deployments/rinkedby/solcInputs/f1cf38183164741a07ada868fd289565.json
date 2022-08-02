@@ -1,0 +1,41 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/FundMe.sol": {
+      "content": "// SPDX-License-Identifier: MIT\n\npragma solidity ^0.8.15;\n\nimport \"./PriceConvertor.sol\";\n\nerror notOwner();\nerror insufficient();\nerror failedCall();\n\ncontract FundMe {\n    using PriceConvertor for uint256;\n\n    uint public constant minimumUsd = 50 * 1e18; // Wei no. of units = 1e18\n    address[] public funders;\n    address public immutable owner;\n\n    AggregatorV3Interface public priceFeed;\n\n    constructor(address priceFeedAddress) {\n        priceFeed = AggregatorV3Interface(priceFeedAddress);\n        owner = msg.sender;\n    }\n\n    mapping(address => uint256) public addressToAmountFunded;\n\n    function fund() public payable {\n        //set minimum fund amount in USD\n        if ((msg.value).getConversionRate(priceFeed) < minimumUsd) {\n            revert insufficient();\n        }\n\n        //store funder data\n        funders.push(msg.sender);\n        addressToAmountFunded[msg.sender] = msg.value; // in Wei\n    }\n\n    function withdraw() public onlyOwner {\n        // set all fund amounts to 0\n        for (uint256 index = 0; index < funders.length; index++) {\n            address funder = funders[index];\n            addressToAmountFunded[funder] = 0;\n        }\n\n        // reset funders array\n        funders = new address[](0);\n\n        // transfer funds to owner\n        (bool callSuccess, ) = payable(msg.sender).call{\n            value: address(this).balance\n        }(\"\");\n        if (!callSuccess) {\n            revert failedCall();\n        }\n    }\n\n    modifier onlyOwner() {\n        if (msg.sender != owner) {\n            revert notOwner();\n        }\n\n        _;\n    }\n\n    receive() external payable {\n        fund();\n    }\n\n    fallback() external payable {\n        fund();\n    }\n}\n"
+    },
+    "contracts/PriceConvertor.sol": {
+      "content": "// SPDX-License-Identifier: MIT\n\npragma solidity ^0.8.15;\n\nimport \"@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol\";\n\nlibrary PriceConvertor {\n    function getPrice(AggregatorV3Interface priceFeed)\n        internal\n        view\n        returns (uint)\n    {\n        // ABI\n        // Address 0x8A753747A1Fa494EC906cE90E9f37563A8AF630e\n\n        (, int256 price, , , ) = priceFeed.latestRoundData();\n        return uint(price * 1e10);\n    }\n\n    function getConversionRate(uint256 ethAmnt, AggregatorV3Interface priceFeed)\n        internal\n        view\n        returns (uint)\n    {\n        uint ethPrice = getPrice(priceFeed);\n        return ((ethAmnt * ethPrice) / 1e18);\n    }\n}\n"
+    },
+    "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ninterface AggregatorV3Interface {\n  function decimals() external view returns (uint8);\n\n  function description() external view returns (string memory);\n\n  function version() external view returns (uint256);\n\n  // getRoundData and latestRoundData should both raise \"No data present\"\n  // if they do not have data to report, instead of returning unset values\n  // which could be misinterpreted as actual reported values.\n  function getRoundData(uint80 _roundId)\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n\n  function latestRoundData()\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
